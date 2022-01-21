@@ -28,8 +28,8 @@ int touchX;
 int touchY;
 
 //Wifi and MQTT
-const char *ssid = "IoTWiFi";
-const char *password = "themagicpassword";
+const char *ssid = "MagicIoT";
+const char *password = "abracadabra";
 const char *mqtt_server = "192.168.1.50";
 
 WiFiClient espClient;
@@ -124,10 +124,10 @@ public:
     text = butText;
     textColor = butTextColor;
     butColor = buttonColor;
-    render();
+    renderButton();
   }
 
-  void render()
+  void renderButton()
   {
     int16_t trashX = 0;
     int16_t trashY = 0;
@@ -168,65 +168,99 @@ int smBtnWidth = (tft.width() / 6);
 unsigned long lastTouch = millis();
 
 //TEMP DISPLAY
+class TempModule
+{
+public:
+  int x;
+  int y;
+  int width;
+  int height;
+  String text;
+  int batLevel;
+  float tempReading;
+  int humidityReading;
+  uint16_t labelHeight = 0;
+  uint16_t labelWidth = 0;
+  uint16_t tempHeight = 0;
+  uint16_t tempWidth = 0;
+
+  TempModule()
+  {
+  }
+
+  void initTempModule(int xPos, int yPos, int tempWidth, int tempHeight, String labelText, int tempBattery)
+  {
+    x = xPos;
+    y = yPos;
+    width = tempWidth;
+    height = tempHeight;
+    text = labelText;
+    batLevel = tempBattery;
+    tempReading = 0;
+    humidityReading = 50;
+
+    renderTemp();
+  }
+
+  void renderTemp()
+  {
+    int16_t trashX = 0;
+    int16_t trashY = 0;
+
+    tft.drawRect(x, y, width, height + 1, ILI9341_BLUE);
+
+    //title
+    tft.setFont(&FreeSans9pt7b);
+    tft.setTextColor(ILI9341_WHITE);
+    tft.getTextBounds(text, 0, 0, &trashX, &trashY, &labelWidth, &labelHeight);
+    tft.setCursor(x + (width / 2) - (labelWidth / 2), y + 15);
+    tft.print(text);
+
+    update(tempReading, batLevel, humidityReading);
+  }
+
+  void update(float newTempC, int newBatLevel, int newHumidity)
+  {
+    //battery bar
+    tft.fillRect(x + 1, y + 18, (width - 2), 3, ILI9341_DARKCYAN);
+    tft.fillRect(x + 1, y + 18, (width - 2) * (newBatLevel * .01), 3, ILI9341_GREEN);
+
+    //temp
+    tft.fillRect(x + 1, y + 21, width - 2, height - 22, ILI9341_BLACK);
+    tft.setFont(&FreeSans24pt7b);
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setTextSize(1);
+    tft.setCursor(x + 5, y + height - 7);
+    float newTempF = ((newTempC * 1.8) + 32.0); //convert to F
+    tft.print(newTempF, 1);
+    tft.setFont(&FreeSans9pt7b);
+
+    //humidity
+    tft.fillRect(x + width - 4, y + 21, 3, 47, ILI9341_DARKCYAN);
+    tft.fillRect(x + width - 4, y + 68, 3, -47 * newHumidity * 0.01, ILI9341_BLUE);
+  }
+};
+
+TempModule BarnTemp;
+TempModule ShedTemp;
+TempModule FreezerTemp;
+TempModule BasementTemp;
+
 void setup_TempsGrid()
 {
-  //Temp grid
-  tft.setTextColor(ILI9341_WHITE);
-  tft.setCursor(40, tft.height() - 50);
-  tft.print("Barn");
-  tft.setCursor(tft.width() / 2 + 7, tft.height() - 50);
-  tft.print("Garden Shed");
-  tft.drawLine(0, tft.height() - 45, tft.width(), tft.height() - 45, ILI9341_DARKGREEN);
-  tft.drawFastHLine(0, tft.height() - 44, tft.width() - 1, ILI9341_BLUE);
-  tft.drawFastVLine(tft.width() / 2 - 1, tft.height() - 65, 65, ILI9341_BLUE);
-  tft.drawLine(tft.width() / 2, tft.height() - 1, tft.width() / 2, tft.height() - 65, ILI9341_DARKGREEN);
-  //dummy data
-  tft.setFont(&FreeSans24pt7b);
-  tft.setCursor(5, tft.height() - 5);
-  tft.print("--.-");
-  tft.setCursor(tft.width() / 2 + 5, tft.height() - 5);
-  tft.print("--.-");
-  tft.setFont(&FreeSans9pt7b);
-}
-
-float convCtoF_SingleDecimal(float tempC)
-{
-  long intTemp;
-  //convert to F
-  float tempF = ((tempC * 9 / 5) + 32);
-  //convert to single decimal
-  intTemp = tempF * 10;
-  tempF = float(intTemp) / 10;
-  return tempF;
-}
-
-void showBarnTemp(float barnTemp, int batLevel)
-{
-  tft.fillRect(1, tft.height() - 42, tft.width()/2 - 4, tft.height() - 1, ILI9341_BLACK);
-  tft.setFont(&FreeSans24pt7b);
-  tft.setTextColor(ILI9341_WHITE);
-  tft.setCursor(5, tft.height() - 5);
-  tft.print(convCtoF_SingleDecimal(barnTemp),1);
-  tft.setFont(&FreeSans9pt7b);
-  tft.fillRect(0, tft.height() - 45, tft.width() / 2 * (batLevel * .01), 2, ILI9341_GREEN);
-}
-
-void showShedTemp(float shedTemp, int batLevel)
-{
-  tft.fillRect(tft.width() / 2 + 1, tft.height() - 42, tft.width()/2 - 4, tft.height() - 1, ILI9341_BLACK);
-  tft.setFont(&FreeSans24pt7b);
-  tft.setTextColor(ILI9341_WHITE);
-  tft.setCursor(tft.width() / 2 + 5, tft.height() - 5);
-  tft.print(convCtoF_SingleDecimal(shedTemp),1);
-  tft.setFont(&FreeSans9pt7b);
-  tft.fillRect(tft.width() / 2, tft.height() - 45, tft.width() / 2 * (batLevel * .01), 2, ILI9341_GREEN);
+  //Temp grid 2x2
+  int gridTop = btnWidth + smBtnWidth * 2 + spacing * 3;
+  int tempWidth = 120;
+  int tempHeight = 68;
+  BarnTemp.initTempModule(0, gridTop, tempWidth, tempHeight, "Barn", 0);
+  ShedTemp.initTempModule(tempWidth, gridTop, tempWidth, tempHeight, "Garden Shed", 0);
+  FreezerTemp.initTempModule(0, gridTop + tempHeight, tempWidth, tempHeight, "Chest Freezer", 0);
+  BasementTemp.initTempModule(tempWidth, gridTop + tempHeight, tempWidth, tempHeight, "Downstairs", 0);
 }
 
 //MQTT Message Actions
 void garageMsgAction(byte *payload)
 {
-  Serial.println("in gar status handling");
-  
   StaticJsonDocument<100> doc;
 
   DeserializationError error = deserializeJson(doc, payload);
@@ -249,17 +283,15 @@ void garageMsgAction(byte *payload)
   Serial.println(MudRm);
 
   String(MudRm) == "OFF" ? GarManDoorBtn.butColor = ILI9341_RED : GarManDoorBtn.butColor = ILI9341_GREEN;
-  GarManDoorBtn.render();
+  GarManDoorBtn.renderButton();
   String(GarW) == "ON" ? WGarBtn.butColor = ILI9341_RED : WGarBtn.butColor = ILI9341_GREEN;
-  WGarBtn.render();
+  WGarBtn.renderButton();
   String(GarE) == "ON" ? EGarBtn.butColor = ILI9341_RED : EGarBtn.butColor = ILI9341_GREEN;
-  EGarBtn.render();
+  EGarBtn.renderButton();
 }
 
 void driveSensMsgAction(byte *payload)
 {
-  Serial.println("in drive sensor handling");
-
   String payloadString = (String((char *)payload));
   const char *POWER = "";
  
@@ -307,17 +339,15 @@ void driveSensMsgAction(byte *payload)
     // const char *Wifi_Downtime = Wifi["Downtime"]; // "0T00:00:07"
   }
   String(POWER) == "OFF" ? DrivewaySensor.butColor = ILI9341_RED : DrivewaySensor.butColor = ILI9341_GREEN;
-  DrivewaySensor.render();
+  DrivewaySensor.renderButton();
 
 }
 
 void playRmLightMsgAction(byte *payload)
 {
-  Serial.println("in playroom light handling");
-
   String payloadString = (String((char *)payload));
   const char *POWER = "";
- 
+
   if (payloadString.length() < 30) //status message
   {
     if (payloadString.startsWith("ON"))
@@ -350,7 +380,7 @@ void playRmLightMsgAction(byte *payload)
     // int Sleep = doc["Sleep"];                 // 50
     // int LoadAvg = doc["LoadAvg"];             // 23
     // int MqttCount = doc["MqttCount"];         // 0
-    POWER = doc["POWER"];         // "OFF"
+    POWER = doc["POWER"]; // "OFF"
 
     // JsonObject Wifi = doc["Wifi"];
     // int Wifi_AP = Wifi["AP"];                     // 1
@@ -361,15 +391,49 @@ void playRmLightMsgAction(byte *payload)
     // int Wifi_Signal = Wifi["Signal"];             // -65
     // int Wifi_LinkCount = Wifi["LinkCount"];       // 1
     // const char *Wifi_Downtime = Wifi["Downtime"]; // "0T00:00:11"
-
   }
   String(POWER) == "ON" ? PlayRoomLights.butColor = ILI9341_RED : PlayRoomLights.butColor = ILI9341_GREEN;
-  PlayRoomLights.render();
+  PlayRoomLights.renderButton();
+}
+
+void barnLightsMsgAction(byte *payload)
+{
+  String payloadString = (String((char *)payload));
+  const char *POWER = "";
+
+  if (payloadString.length() < 30) //status message
+  {
+    if (payloadString.startsWith("ON"))
+    {
+      POWER = "ON";
+    }
+    else if (payloadString.startsWith("OFF"))
+    {
+      POWER = "OFF";
+    }
+  }
+  else // telemetry message
+  {
+    StaticJsonDocument<384> doc;
+
+    DeserializationError error = deserializeJson(doc, payload);
+
+    if (error)
+    {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.f_str());
+      return;
+    }
+
+    POWER = doc["POWER"]; // "OFF"
+  }
+  String(POWER) == "ON" ? BarnLights.butColor = ILI9341_RED : BarnLights.butColor = ILI9341_GREEN;
+  BarnLights.renderButton();
 }
 
 void tempMsgAction(byte *payload)
 {
-  StaticJsonDocument<200> doc;
+  StaticJsonDocument<500> doc;
 
   DeserializationError error = deserializeJson(doc, payload);
 
@@ -390,45 +454,61 @@ void tempMsgAction(byte *payload)
   // const char *Time = doc["Time"];                                     // "2021-12-17T22:24:11"
   // int RSSI_via_BarnBLEBridge = doc["RSSI_via_BarnBLEBridge"];         // -34
   // const char *via_device = doc["via_device"];                         // "BarnBLEBridge"
-  // int Humidity = doc["Humidity"];                                     // 36
+  int Humidity = doc["Humidity"];                                     // 36
 
   if (String(alias) == "BarnTemp")
   {
     Serial.print("Temperature is :");
     Serial.println(float(Temperature));
-    showBarnTemp(float(Temperature), Battery);
+    BarnTemp.update(float(Temperature), Battery, Humidity);
   }
   else if (String(alias) == "ShedTemp")
   {
-    showShedTemp(float(Temperature), Battery);
+    ShedTemp.update(float(Temperature), Battery, Humidity);
+  }
+  else if (String(alias) == "BasementFreezer")
+  {
+    FreezerTemp.update(float(Temperature), Battery, Humidity);
+  }
+  else if (String(alias) == "Basement")
+  {
+    BasementTemp.update(float(Temperature), Battery, Humidity);
+  }
+  else
+  {
+    Serial.println("No Temp routine found");
   }
 }
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
   Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (uint16_t i = 0; i < length; i++)
-  {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println(String(topic));
+  Serial.println(topic);
+  Serial.println("] ");
+  // for (uint16_t i = 0; i < length; i++)
+  // {
+  //   Serial.print((char)payload[i]);
+  // }
+  // Serial.println(String(topic));
 
   if (String(topic) == "tele/garage/SENSOR") //garage door sensors
   {
+    Serial.println("garageMsgAction");
     garageMsgAction(payload);
   }
   else if (String(topic) == "tele/DriveBell/STATE" || String(topic) == "stat/DriveBell/POWER") //driveway sensor chime
   {
+    Serial.println("driveSensMsgAction");
     driveSensMsgAction(payload);
   }
-  // else if (String(topic) == "tele/tasmota_53AA9D/STATE" || String(topic) == "stat/tasmota_53AA9D/POWER") //playroom light
-  // {
-  //   playRmLightMsgAction(payload);
-  // }
-  else if (String(topic) == "tele/tasmota_blerry/BarnTemp" || String(topic) == "tele/tasmota_blerry/ShedTemp")
+  else if (String(topic) == "tele/barnlightsN/STATE" || String(topic) == "stat/barnlightsN/POWER") //Barn N Lights
   {
+    Serial.println("barnLightsMsgAction");
+    barnLightsMsgAction(payload);
+  }
+  else if (String(topic).startsWith("tele/tasmota_blerry/"))
+  {
+    Serial.println("tempMsgAction");
     tempMsgAction(payload);
   }
 }
@@ -448,12 +528,16 @@ void reconnect()
       Serial.println("connected");
       // ... and resubscribe
       client.subscribe("tele/garage/SENSOR"); //garage sensors
-      client.subscribe("tele/DriveBell/STATE"); //driveway alert chime plug
-      client.subscribe("stat/DriveBell/POWER"); //driveway alert chime plug
-      // client.subscribe("tele/tasmota_53AA9D/STATE"); //Playroom lights
-      // client.subscribe("stat/tasmota_53AA9D/POWER"); //Playroom lights
-      client.subscribe("tele/tasmota_blerry/BarnTemp");
-      client.subscribe("tele/tasmota_blerry/ShedTemp");
+      client.subscribe("tele/DriveBell/#");   //driveway alert chime plug
+      // client.subscribe("tele/DriveBell/STATE");   //driveway alert chime plug
+      // client.subscribe("stat/DriveBell/POWER");   //driveway alert chime plug
+      client.subscribe("tele/barnlightsN/#"); //Barn N lights
+      // client.subscribe("tele/barnlightsN/STATE"); //Barn N lights
+      // client.subscribe("stat/barnlightsN/POWER"); //Barn N lights
+      client.subscribe("tele/barnlightsS/#"); //Barn S lights
+      // client.subscribe("tele/barnlightsS/STATE"); //Barn S lights
+      // client.subscribe("stat/barnlightsS/POWER"); //Barn S lights
+      client.subscribe("tele/tasmota_blerry/#"); //Bluetooth temp sensors
     }
     else
     {
@@ -467,6 +551,7 @@ void reconnect()
 }
 
 
+
 void setup()
 {
   Serial.begin(115200);
@@ -475,7 +560,7 @@ void setup()
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
-  client.setBufferSize(450);
+  client.setBufferSize(512);
   Serial.print("MQTT message buffer size: ");
   Serial.println(client.getBufferSize());
 
@@ -487,13 +572,11 @@ void setup()
   tft.fillScreen(ILI9341_BLACK);
 
   //Buttons
-  WGarBtn.initButton(0, 0, btnWidth, btnWidth, (new String("W Gar"))->c_str(), ILI9341_BLACK, ILI9341_GREEN);
-  GarManDoorBtn.initButton(btnWidth + spacing, 0, btnWidth, btnWidth, (new String("Mud Rm"))->c_str(), ILI9341_BLACK, ILI9341_GREEN);
-  EGarBtn.initButton(btnWidth * 2 + spacing * 2, 0, btnWidth, btnWidth, (new String("E Gar"))->c_str(), ILI9341_BLACK, ILI9341_GREEN);
-  BarnLights.initButton(1, btnWidth + spacing, tft.width() - 1, smBtnWidth, (new String("Barn Lights"))->c_str(), ILI9341_BLACK, ILI9341_GREEN);
-  DrivewaySensor.initButton(1, btnWidth + smBtnWidth + spacing * 2, tft.width() - 1, smBtnWidth, (new String("Driveway Sensor"))->c_str(), ILI9341_BLACK, ILI9341_GREEN);
-  //PlayRoomLights.initButton(tft.width() - 1 - smBtnWidth, btnWidth + smBtnWidth *2 + spacing *3 , smBtnWidth, smBtnWidth, (new String(""))->c_str(), ILI9341_BLACK, ILI9341_GREEN);
-  //PlayRoomLabel.initButton(0, PlayRoomLights.y, tft.width() - spacing - PlayRoomLights.width, PlayRoomLights.height, (new String("Play Room Lights"))->c_str(), ILI9341_WHITE, ILI9341_BLACK);
+  WGarBtn.initButton(0, 0, btnWidth, btnWidth, (new String("W Gar"))->c_str(), ILI9341_BLACK, ILI9341_GREENYELLOW);
+  GarManDoorBtn.initButton(btnWidth + spacing, 0, btnWidth, btnWidth, (new String("Mud Rm"))->c_str(), ILI9341_BLACK, ILI9341_GREENYELLOW);
+  EGarBtn.initButton(btnWidth * 2 + spacing * 2, 0, btnWidth, btnWidth, (new String("E Gar"))->c_str(), ILI9341_BLACK, ILI9341_GREENYELLOW);
+  BarnLights.initButton(1, btnWidth + spacing, tft.width() - 1, smBtnWidth, (new String("Barn Lights"))->c_str(), ILI9341_BLACK, ILI9341_GREENYELLOW);
+  DrivewaySensor.initButton(1, btnWidth + smBtnWidth + spacing * 2, tft.width() - 1, smBtnWidth, (new String("Driveway Sensor"))->c_str(), ILI9341_BLACK, ILI9341_GREENYELLOW);
 
   //Temps
   setup_TempsGrid();
@@ -525,12 +608,24 @@ void loop(void)
     {
       client.publish("cmnd/DriveBell/POWER", "TOGGLE");
     }
-    // if (PlayRoomLabel.isClicked(sp) || PlayRoomLights.isClicked(sp))
-    // {
-    //   client.publish("cmnd/tasmota_53AA9D/POWER", "TOGGLE");
-    // }
+    if (BarnLights.isClicked(sp))
+    {
+      Serial.println("BarnLights touched");
+      if(BarnLights.butColor==ILI9341_RED)
+      {
+        Serial.println("BarnLights RED");
+        client.publish("cmnd/barnlightsS/POWER", "OFF");
+        client.publish("cmnd/barnlightsN/POWER", "OFF");
+      }
+      else
+      {
+        Serial.println("BarnLights not RED");
+        client.publish("cmnd/barnlightsS/POWER", "ON");
+        client.publish("cmnd/barnlightsN/POWER", "ON");
+      }
+      Serial.println("BarnLights exit");
+    }
   }
-
 
 }
 
