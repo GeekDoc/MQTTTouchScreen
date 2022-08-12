@@ -10,34 +10,38 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
+//LCD and Touch I2C pins
 #define TFT_CS D0  //for D1 mini or TFT I2C Connector Shield (V1.1.0 or later)
 #define TFT_DC D8  //for D1 mini or TFT I2C Connector Shield (V1.1.0 or later)
 #define TFT_RST -1 //for D1 mini or TFT I2C Connector Shield (V1.1.0 or later)
 #define TS_CS D3   //for D1 mini or TFT I2C Connector Shield (V1.1.0 or later)
 
-// Touch calibration values
+// Touch calibration values (calculated for individual screen/touch panel)
 #define xCalM 0.07
 #define xCalC -20.0
 #define yCalM -0.09
 #define yCalC 340.0
 
+//Create screen and touch objects
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 XPT2046_Touchscreen ts(TS_CS);
 
+//variables for touch input
 int touchX;
 int touchY;
 
-//Wifi and MQTT
+//Wifi and MQTT info
 const char *ssid = "MagicIoT";
 const char *password = "abracadabra";
 const char *mqtt_server = "192.168.1.50";
 
+//Create WiFi and MQTT client objects
 WiFiClient espClient;
 PubSubClient client(espClient);
-// unsigned long lastMsg = 0;
+
+//variables for MQTT message
 #define MSG_BUFFER_SIZE (400)
 char msg[MSG_BUFFER_SIZE];
-// int value = 0;
 
 void setup_wifi()
 {
@@ -66,7 +70,8 @@ void setup_wifi()
 }
 
 
-// Buttons
+// ScreenPoint class
+// Adjusts for touch calibration
 class ScreenPoint
 {
 public:
@@ -100,6 +105,8 @@ ScreenPoint getScreenCoords(int16_t x, int16_t y)
   return (ScreenPoint(xCoord, yCoord));
 }
 
+//Button class
+//Allows for placement, size, text, colors, touch validation
 class Button
 {
 public:
@@ -155,6 +162,7 @@ public:
   }
 };
 
+//Button objects
 Button WGarBtn;
 Button GarManDoorBtn;
 Button EGarBtn;
@@ -162,12 +170,19 @@ Button BarnLights;
 Button DrivewaySensor;
 Button PlayRoomLights;
 Button PlayRoomLabel;
+
+//Button layout variables
 int spacing = 10;
 int btnWidth = (tft.width() - (2 * spacing)) / 3;
 int smBtnWidth = (tft.width() / 6);
+
+//Button debounce variable (even touch screens "bounce"!)
 unsigned long lastTouch = millis();
 
-//TEMP DISPLAY
+//TempModule class
+//A multi-data display with temp, humidity, and battery level
+//Size, position, and text label configurable
+//TODO: Make colors configurable
 class TempModule
 {
 public:
@@ -204,6 +219,7 @@ public:
 
   void renderTemp()
   {
+    //throw-away variables for text width calculation
     int16_t trashX = 0;
     int16_t trashY = 0;
 
@@ -241,21 +257,22 @@ public:
   }
 };
 
+//TempModule objects
 TempModule BarnTemp;
 TempModule ShedTemp;
 TempModule FreezerTemp;
-TempModule BasementTemp;
+TempModule OutsideTemp;
 
 void setup_TempsGrid()
 {
   //Temp grid 2x2
-  int gridTop = btnWidth + smBtnWidth * 2 + spacing * 3;
-  int tempWidth = 120;
-  int tempHeight = 68;
+  int gridTop = btnWidth + smBtnWidth * 2 + spacing * 3; //calculate top from buttons above temps
+  int tempWidth = 120; //TODO: this should probably be calculated
+  int tempHeight = 68; //TODO: this should probably be calculated
   BarnTemp.initTempModule(0, gridTop, tempWidth, tempHeight, "Barn", 0);
   ShedTemp.initTempModule(tempWidth, gridTop, tempWidth, tempHeight, "Garden Shed", 0);
   FreezerTemp.initTempModule(0, gridTop + tempHeight, tempWidth, tempHeight, "Chest Freezer", 0);
-  BasementTemp.initTempModule(tempWidth, gridTop + tempHeight, tempWidth, tempHeight, "Downstairs", 0);
+  OutsideTemp.initTempModule(tempWidth, gridTop + tempHeight, tempWidth, tempHeight, "Outdoors", 0);
 }
 
 //MQTT Message Actions
@@ -450,7 +467,7 @@ void tempMsgAction(byte *payload)
   // float DewPoint = doc["DewPoint"];                                   // 6.16
   // const char *mac = doc["mac"];                                       // "A4C1388075C7"
   // int RSSI = doc["RSSI"];                                             // -34
-  const char *alias = doc["alias"];                                   // "BarnTemp"
+  const char *alias = doc["Alias"];                                   // "BarnTemp"
   // const char *Time = doc["Time"];                                     // "2021-12-17T22:24:11"
   // int RSSI_via_BarnBLEBridge = doc["RSSI_via_BarnBLEBridge"];         // -34
   // const char *via_device = doc["via_device"];                         // "BarnBLEBridge"
@@ -470,13 +487,14 @@ void tempMsgAction(byte *payload)
   {
     FreezerTemp.update(float(Temperature), Battery, Humidity);
   }
-  else if (String(alias) == "Basement")
+  else if (String(alias) == "OutsideTemp")
   {
-    BasementTemp.update(float(Temperature), Battery, Humidity);
+    OutsideTemp.update(float(Temperature), Battery, Humidity);
   }
   else
   {
-    Serial.println("No Temp routine found");
+    Serial.print("No Temp routine found for Alias: ");
+    Serial.println(alias);
   }
 }
 
@@ -528,15 +546,9 @@ void reconnect()
       Serial.println("connected");
       // ... and resubscribe
       client.subscribe("tele/garage/SENSOR"); //garage sensors
-      client.subscribe("tele/DriveBell/#");   //driveway alert chime plug
-      // client.subscribe("tele/DriveBell/STATE");   //driveway alert chime plug
-      // client.subscribe("stat/DriveBell/POWER");   //driveway alert chime plug
-      client.subscribe("tele/barnlightsN/#"); //Barn N lights
-      // client.subscribe("tele/barnlightsN/STATE"); //Barn N lights
-      // client.subscribe("stat/barnlightsN/POWER"); //Barn N lights
-      client.subscribe("tele/barnlightsS/#"); //Barn S lights
-      // client.subscribe("tele/barnlightsS/STATE"); //Barn S lights
-      // client.subscribe("stat/barnlightsS/POWER"); //Barn S lights
+      client.subscribe("tele/DrivewaySensor/#");   //driveway alert chime plug
+      client.subscribe("tele/BarnLightsNorth/#"); //Barn N lights
+      client.subscribe("tele/BarnLightsSouth/#"); //Barn S lights
       client.subscribe("tele/tasmota_blerry/#"); //Bluetooth temp sensors
     }
     else
@@ -560,7 +572,7 @@ void setup()
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
-  client.setBufferSize(512);
+  client.setBufferSize(512); //big buffer for long status messages
   Serial.print("MQTT message buffer size: ");
   Serial.println(client.getBufferSize());
 
@@ -572,6 +584,7 @@ void setup()
   tft.fillScreen(ILI9341_BLACK);
 
   //Buttons
+  //TODO: Break this section out to a function, like the temps grid
   WGarBtn.initButton(0, 0, btnWidth, btnWidth, (new String("W Gar"))->c_str(), ILI9341_BLACK, ILI9341_GREENYELLOW);
   GarManDoorBtn.initButton(btnWidth + spacing, 0, btnWidth, btnWidth, (new String("Mud Rm"))->c_str(), ILI9341_BLACK, ILI9341_GREENYELLOW);
   EGarBtn.initButton(btnWidth * 2 + spacing * 2, 0, btnWidth, btnWidth, (new String("E Gar"))->c_str(), ILI9341_BLACK, ILI9341_GREENYELLOW);
@@ -611,17 +624,17 @@ void loop(void)
     if (BarnLights.isClicked(sp))
     {
       Serial.println("BarnLights touched");
-      if(BarnLights.butColor==ILI9341_RED)
+      if(BarnLights.butColor==ILI9341_RED) //this is the only way I currently have of knowing status
       {
         Serial.println("BarnLights RED");
-        client.publish("cmnd/barnlightsS/POWER", "OFF");
-        client.publish("cmnd/barnlightsN/POWER", "OFF");
+        client.publish("cmnd/BarnLightsSouth/POWER", "OFF");
+        client.publish("cmnd/BarnLightsNorth/POWER", "OFF");
       }
       else
       {
         Serial.println("BarnLights not RED");
-        client.publish("cmnd/barnlightsS/POWER", "ON");
-        client.publish("cmnd/barnlightsN/POWER", "ON");
+        client.publish("cmnd/BarnLightsSouth/POWER", "ON");
+        client.publish("cmnd/BarnLightsNorth/POWER", "ON");
       }
       Serial.println("BarnLights exit");
     }
